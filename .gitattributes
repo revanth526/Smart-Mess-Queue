@@ -1,0 +1,9 @@
+# Auto-normalize line endings
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.ico binary
+*.svg binary
+*.woff2 binary

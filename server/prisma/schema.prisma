@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  STUDENT
+  MESS_ADMIN
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum BookingStatus {
+  BOOKED
+  CHECKED_IN
+  WAITING
+  SERVING
+  SERVED
+  CANCELLED
+  NO_SHOW
+  WALK_IN
+}
+
+enum EntryType {
+  BOOKING
+  WALK_IN
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+/// Student or admin user account.
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  rollNo       String?  @unique
+  passwordHash String
+  role         Role     @default(STUDENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt      @db.Timestamptz
+
+  bookings      Booking[]
+  feedbacks     Feedback[]
+  foodRecordsBy FoodRecord[]   @relation("FoodLogger")
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+/// Physical dining hall / mess.
+model Mess {
+  id            String   @id @default(uuid())
+  name          String
+  location      String?
+  totalCapacity Int
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt      @db.Timestamptz
+
+  mealConfigs MealConfig[]
+  menuItems   MenuItem[]
+  menus       Menu[]
+
+  @@map("messes")
+}
+
+/// Configurable meal timing and slot rules.
+model MealConfig {
+  id                        String   @id @default(uuid())
+  messId                    String
+  mealType                  MealType
+  startTime                 String   // "07:30" wall-clock IST HH:mm
+  endTime                   String   // "09:30" wall-clock IST HH:mm
+  slotDurationMinutes       Int      @default(20)
+  bookingCutoffMinutes      Int      @default(30)
+  cancellationCutoffMinutes Int      @default(30)
+  defaultSlotCapacity       Int      @default(50)
+  averageServingTimeSeconds Int      @default(30)
+  isActive                  Boolean  @default(true)
+  createdAt                 DateTime @default(now()) @db.Timestamptz
+  updatedAt                 DateTime @updatedAt      @db.Timestamptz
+
+  mess Mess @relation(fields: [messId], references: [id], onDelete: Restrict)
+
+  @@unique([messId, mealType])
+  @@map("meal_configs")
+}
+
+/// Reusable dish catalog (master list).
+model MenuItem {
+  id                  String   @id @default(uuid())
+  messId              String
+  name                String
+  category            String?
+  defaultServingGrams Int?
+  isAvailable         Boolean  @default(true)
+  createdAt           DateTime @default(now()) @db.Timestamptz
+  updatedAt           DateTime @updatedAt      @db.Timestamptz
+
+  mess       Mess       @relation(fields: [messId], references: [id], onDelete: Restrict)
+  menuDishes MenuDish[]
+
+  @@unique([messId, name])
+  @@index([messId, isAvailable])
+  @@map("menu_items")
+}
+
+/// A specific meal service occurrence on a specific date.
+model Menu {
+  id        String   @id @default(uuid())
+  messId    String
+  date      DateTime @db.Date
+  mealType  MealType
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt      @db.Timestamptz
+
+  mess        Mess         @relation(fields: [messId], references: [id], onDelete: Restrict)
+  dishes      MenuDish[]
+  slots       TimeSlot[]
+  bookings    Booking[]
+  foodRecords FoodRecord[]
+  feedbacks   Feedback[]
+
+  @@unique([messId, date, mealType])
+  @@index([date, mealType])
+  @@index([messId, date])
+  @@map("menus")
+}
+
+/// Snapshot of a dish served at a specific Menu occurrence.
+model MenuDish {
+  id           String   @id @default(uuid())
+  menuId       String
+  menuItemId   String?
+  dishName     String
+  dishCategory String?
+  servingGrams Int?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz
+
+  menu        Menu         @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  menuItem    MenuItem?    @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  foodRecords FoodRecord[]
+
+  @@index([menuId])
+  @@map("menu_dishes")
+}
+
+/// Bookable time window within a meal service.
+model TimeSlot {
+  id              String   @id @default(uuid())
+  menuId          String
+  startTime       DateTime @db.Timestamptz
+  endTime         DateTime @db.Timestamptz
+  capacity        Int
+  currentBookings Int      @default(0)
+  createdAt       DateTime @default(now()) @db.Timestamptz
+
+  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([menuId])
+  @@index([menuId, startTime])
+  @@map("time_slots")
+}
+
+/// Student's meal lifecycle record.
+model Booking {
+  id          String        @id @default(uuid())
+  studentId   String
+  menuId      String
+  slotId      String?
+  status      BookingStatus @default(BOOKED)
+  entryType   EntryType     @default(BOOKING)
+
+  // Lifecycle timestamps
+  bookedAt    DateTime? @db.Timestamptz
+  checkedInAt DateTime? @db.Timestamptz
+  waitingAt   DateTime? @db.Timestamptz
+  servingAt   DateTime? @db.Timestamptz
+  servedAt    DateTime? @db.Timestamptz
+  cancelledAt DateTime? @db.Timestamptz
+  noShowAt    DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt      @db.Timestamptz
+
+  student User      @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  menu    Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  slot    TimeSlot? @relation(fields: [slotId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, menuId])
+  @@index([menuId, status])
+  @@index([studentId, status])
+  @@index([menuId, entryType])
+  @@index([slotId])
+  @@index([status, waitingAt])
+  @@map("bookings")
+}
+
+/// Food preparation, serving, and waste record.
+model FoodRecord {
+  id         String   @id @default(uuid())
+  menuId     String
+  menuDishId String?
+  preparedKg Float
+  servedKg   Float
+  wastedKg   Float
+  loggedById String
+  notes      String?
+  loggedAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt      @db.Timestamptz
+
+  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  menuDish MenuDish? @relation(fields: [menuDishId], references: [id], onDelete: SetNull)
+  loggedBy User      @relation("FoodLogger", fields: [loggedById], references: [id], onDelete: Restrict)
+
+  @@index([menuId])
+  @@index([loggedAt])
+  @@map("food_records")
+}
+
+/// Student's meal rating (future feature, schema ready).
+model Feedback {
+  id        String   @id @default(uuid())
+  studentId String
+  menuId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  menu    Menu @relation(fields: [menuId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, menuId])
+  @@index([menuId])
+  @@map("feedbacks")
+}
+
+/// JWT refresh token for session management.
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRevoked])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

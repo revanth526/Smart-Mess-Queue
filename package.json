@@ -1,0 +1,29 @@
+{
+  "name": "smart-mess-queue",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Mess Queue & Food Waste Optimization Platform",
+  "scripts": {
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build:server": "npm run build --prefix server",
+    "lint:client": "npm run lint --prefix client",
+    "lint:server": "npm run lint --prefix server",
+    "lint": "npm run lint:client && npm run lint:server",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\" --ignore-path .gitignore",
+    "test:client": "npm test --prefix client",
+    "test:server": "npm test --prefix server",
+    "test": "npm run test:client && npm run test:server",
+    "db:migrate": "npm run db:migrate --prefix server",
+    "db:generate": "npm run db:generate --prefix server",
+    "db:seed": "npm run db:seed --prefix server",
+    "db:studio": "npm run db:studio --prefix server",
+    "db:reset": "npm run db:reset --prefix server",
+    "setup": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0"
+  }
+}
