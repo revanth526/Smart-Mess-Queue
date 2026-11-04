@@ -1,0 +1,5 @@
+✓ Server running on http://localhost:3000
+  Environment: development
+  Health check: http://localhost:3000/api/health
+✓ Database connected
+[0mGET /api/health [32m200[0m 6.491 ms - 125[0m

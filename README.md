@@ -4,15 +4,15 @@ A full-stack web application to help students and mess administrators manage mea
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS |
-| **Backend** | Node.js, Express.js, TypeScript |
-| **Database** | PostgreSQL 16, Prisma ORM |
-| **Real-time** | Socket.IO |
-| **Auth** | JWT (access + HTTP-only refresh token) |
-| **Validation** | Zod |
-| **Testing** | Vitest + React Testing Library (client), Jest + Supertest (server) |
+| Layer          | Technology                                                         |
+| -------------- | ------------------------------------------------------------------ |
+| **Frontend**   | React 19, TypeScript, Vite, Tailwind CSS                           |
+| **Backend**    | Node.js, Express.js, TypeScript                                    |
+| **Database**   | PostgreSQL 16, Prisma ORM                                          |
+| **Real-time**  | Socket.IO                                                          |
+| **Auth**       | JWT (access + HTTP-only refresh token)                             |
+| **Validation** | Zod                                                                |
+| **Testing**    | Vitest + React Testing Library (client), Jest + Supertest (server) |
 
 ## Prerequisites
 
@@ -43,17 +43,17 @@ cp .env.example .env
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/smart_mess_dev` | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | — | Secret for signing access tokens |
-| `JWT_REFRESH_SECRET` | — | Secret for signing refresh tokens |
-| `ACCESS_TOKEN_EXPIRY` | `15m` | Access token lifetime |
-| `REFRESH_TOKEN_EXPIRY` | `7d` | Refresh token lifetime |
-| `SERVER_PORT` | `3000` | Backend server port |
-| `CLIENT_URL` | `http://localhost:5173` | Frontend URL (for CORS) |
-| `NODE_ENV` | `development` | Environment mode |
-| `BCRYPT_ROUNDS` | `12` | bcrypt hash rounds |
+| Variable               | Default                                                        | Description                       |
+| ---------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `DATABASE_URL`         | `postgresql://postgres:postgres@localhost:5432/smart_mess_dev` | PostgreSQL connection string      |
+| `JWT_ACCESS_SECRET`    | —                                                              | Secret for signing access tokens  |
+| `JWT_REFRESH_SECRET`   | —                                                              | Secret for signing refresh tokens |
+| `ACCESS_TOKEN_EXPIRY`  | `15m`                                                          | Access token lifetime             |
+| `REFRESH_TOKEN_EXPIRY` | `7d`                                                           | Refresh token lifetime            |
+| `SERVER_PORT`          | `3000`                                                         | Backend server port               |
+| `CLIENT_URL`           | `http://localhost:5173`                                        | Frontend URL (for CORS)           |
+| `NODE_ENV`             | `development`                                                  | Environment mode                  |
+| `BCRYPT_ROUNDS`        | `12`                                                           | bcrypt hash rounds                |
 
 ## PostgreSQL Setup
 
@@ -233,25 +233,140 @@ Smart-Mess-Queue/
 └── README.md
 ```
 
+## Core Domain Modules
+
+The platform implements 6 core domain modules following a strict layered architecture (`routes → controllers → services → repositories → Prisma`):
+
+1. **Authentication & RBAC (`/api/auth`)**:
+   - Roles: `STUDENT` and `MESS_ADMIN`.
+   - Short-lived JWT access tokens (15m) and secure, HTTP-only refresh tokens (7d).
+   - Refresh token rotation with automatic replay attack detection (reused tokens revoke all user sessions).
+   - Bcrypt password hashing (12 rounds) with constant-time dummy hashing against timing attacks.
+
+2. **Mess & Menu Management (`/api/messes`, `/api/menus`, `/api/menu-items`, `/api/meal-configs`)**:
+   - Dining hall capacity configuration and reusable dish catalogs.
+   - Configurable meal service windows (Breakfast, Lunch, Dinner) with custom slot durations and cutoff times.
+   - Menu publishing with automatic time slot generation based on meal configs.
+
+3. **Student Booking Flow (`/api/bookings`)**:
+   - Conflict-free meal booking with cutoff deadlines.
+   - **Atomic concurrency protection**: Slots use database-level atomic increments (`UPDATE time_slots SET currentBookings = currentBookings + 1 WHERE id = $1 AND currentBookings < capacity`) to guarantee zero overbooking under high concurrency.
+   - Idempotent rebooking and transactional cancellation capacity recovery.
+
+4. **Check-in & Live Queue (`/api/queue`)**:
+   - 15-minute pre-slot check-in window validation.
+   - Sequential, monotonic ticketing per meal service.
+   - State machine: `CHECKED_IN` → `WAITING` → `SERVING` → `SERVED` (or `NO_SHOW`).
+   - Real-time updates broadcast via Socket.IO strictly _after_ database transactions commit.
+   - Admin walk-in entry management without creating fake user accounts.
+
+5. **Food Waste Tracking & Analytics (`/api/food-logs`)**:
+   - Strict mathematical invariants enforced on backend:
+     - `preparedKg >= 0`, `servedKg >= 0`, `wastedKg >= 0`
+     - `servedKg + wastedKg <= preparedKg`
+     - Derived `remainingKg = preparedKg - servedKg - wastedKg`
+     - Derived `wastePercentage = (wastedKg / preparedKg) * 100` (safe zero handling)
+   - Historical tracking by date, meal type, menu, and dining hall.
+
+6. **Student Feedback & Operational Metrics (`/api/feedback`)**:
+   - Service verification: Only legitimate completed meals (`SERVED` status with completed timestamp) can receive feedback.
+   - Rejection of in-progress, cancelled, no-show, or future meals/slots.
+   - Integer rating (1–5) and comment validation (max 500 characters).
+   - Strict multi-mess tenant isolation for all admin analytics and queries.
+   - High-performance batch operational metrics eliminating N+1 database queries.
+
+---
+
+## Production Deployment Guide
+
+### 1. Build Artifacts
+
+```bash
+# Build frontend client (outputs to client/dist)
+npm run build:client
+
+# Compile backend TypeScript (outputs to server/dist)
+npm run build:server
+```
+
+### 2. Production Database Migration
+
+In production, run Prisma migration deployment to apply schema migrations without invoking development resets:
+
+```bash
+cd server
+npx prisma migrate deploy
+```
+
+### 3. Production Environment Checklist
+
+Ensure the production environment defines:
+
+- `NODE_ENV=production`
+- `DATABASE_URL` pointing to production PostgreSQL with SSL (`?sslmode=require`).
+- `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` set to distinct, cryptographically random 256-bit keys (`openssl rand -base64 48`).
+- `CLIENT_URL` pointing to the public HTTPS domain of the frontend for CORS and Cookie scoping.
+- `SERVER_PORT` set to your application port (e.g. `3000`).
+
+### 4. Reverse Proxy & WebSocket Configuration (Nginx)
+
+When deploying behind Nginx or an Application Load Balancer, ensure WebSocket upgrade headers are passed for Socket.IO:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name mess.university.edu;
+
+    # Frontend static files
+    location / {
+        root /var/www/smart-mess-queue/client/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend REST API
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Real-time WebSockets
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:3000/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+---
+
 ## Available Scripts
 
 ### Root
 
-| Script | Description |
-|--------|-------------|
-| `npm run setup` | Install all dependencies |
-| `npm run dev:client` | Start frontend dev server |
-| `npm run dev:server` | Start backend dev server |
-| `npm run build:client` | Build frontend for production |
-| `npm run build:server` | Compile backend TypeScript |
-| `npm run lint` | Lint client + server |
-| `npm run format` | Format all files with Prettier |
-| `npm test` | Run all tests |
-| `npm run db:migrate` | Run Prisma migrations |
-| `npm run db:generate` | Generate Prisma client |
-| `npm run db:seed` | Seed the database |
-| `npm run db:studio` | Open Prisma Studio |
-| `npm run db:reset` | Reset database (drop + migrate + seed) |
+| Script                 | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| `npm run setup`        | Install all dependencies across all packages  |
+| `npm run dev:client`   | Start frontend development server             |
+| `npm run dev:server`   | Start backend development server              |
+| `npm run build:client` | Build frontend for production (`client/dist`) |
+| `npm run build:server` | Compile backend TypeScript (`server/dist`)    |
+| `npm run lint`         | Lint client + server codebases                |
+| `npm run format`       | Format all files with Prettier                |
+| `npm test`             | Run complete server and client test suites    |
+| `npm run db:migrate`   | Run Prisma development migrations             |
+| `npm run db:generate`  | Generate Prisma client                        |
+| `npm run db:seed`      | Seed the database                             |
+| `npm run db:studio`    | Open Prisma Studio database viewer            |
+| `npm run db:reset`     | Reset database (drop + migrate + seed)        |
+
+---
 
 ## License
 

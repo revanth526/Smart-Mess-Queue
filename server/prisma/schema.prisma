@@ -38,6 +38,14 @@ enum EntryType {
   WALK_IN
 }
 
+enum QueueStatus {
+  CHECKED_IN
+  WAITING
+  SERVING
+  SERVED
+  NO_SHOW
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -46,7 +54,8 @@ enum EntryType {
 model User {
   id           String   @id @default(uuid())
   name         String
-  email        String   @unique
+  email        String?  @unique
+  studentId    String?  @unique
   rollNo       String?  @unique
   passwordHash String
   role         Role     @default(STUDENT)
@@ -56,8 +65,9 @@ model User {
 
   bookings      Booking[]
   feedbacks     Feedback[]
-  foodRecordsBy FoodRecord[]   @relation("FoodLogger")
+  foodLogs      FoodLog[]      @relation("FoodLogger")
   refreshTokens RefreshToken[]
+  queueEntries  QueueEntry[]
 
   @@map("users")
 }
@@ -75,6 +85,7 @@ model Mess {
   mealConfigs MealConfig[]
   menuItems   MenuItem[]
   menus       Menu[]
+  foodLogs    FoodLog[]
 
   @@map("messes")
 }
@@ -130,11 +141,12 @@ model Menu {
   updatedAt DateTime @updatedAt      @db.Timestamptz
 
   mess        Mess         @relation(fields: [messId], references: [id], onDelete: Restrict)
-  dishes      MenuDish[]
-  slots       TimeSlot[]
-  bookings    Booking[]
-  foodRecords FoodRecord[]
-  feedbacks   Feedback[]
+  dishes       MenuDish[]
+  slots        TimeSlot[]
+  bookings     Booking[]
+  foodLogs     FoodLog[]
+  feedbacks    Feedback[]
+  queueEntries QueueEntry[]
 
   @@unique([messId, date, mealType])
   @@index([date, mealType])
@@ -155,7 +167,6 @@ model MenuDish {
 
   menu        Menu         @relation(fields: [menuId], references: [id], onDelete: Cascade)
   menuItem    MenuItem?    @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
-  foodRecords FoodRecord[]
 
   @@index([menuId])
   @@map("menu_dishes")
@@ -171,8 +182,9 @@ model TimeSlot {
   currentBookings Int      @default(0)
   createdAt       DateTime @default(now()) @db.Timestamptz
 
-  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  bookings Booking[]
+  menu         Menu         @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  queueEntries QueueEntry[]
 
   @@index([menuId])
   @@index([menuId, startTime])
@@ -200,9 +212,11 @@ model Booking {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt      @db.Timestamptz
 
-  student User      @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  menu    Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
-  slot    TimeSlot? @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  menu       Menu        @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  slot       TimeSlot?   @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  queueEntry QueueEntry?
+  feedback   Feedback?
 
   @@unique([studentId, menuId])
   @@index([menuId, status])
@@ -213,41 +227,79 @@ model Booking {
   @@map("bookings")
 }
 
-/// Food preparation, serving, and waste record.
-model FoodRecord {
-  id         String   @id @default(uuid())
-  menuId     String
-  menuDishId String?
-  preparedKg Float
-  servedKg   Float
-  wastedKg   Float
-  loggedById String
-  notes      String?
-  loggedAt   DateTime @default(now()) @db.Timestamptz
-  updatedAt  DateTime @updatedAt      @db.Timestamptz
+/// Real-time live queue entry for physical mess dining service.
+model QueueEntry {
+  id                String      @id @default(uuid())
+  menuId            String
+  slotId            String?
+  bookingId         String?     @unique
+  studentId         String?
+  entryType         EntryType   @default(BOOKING)
+  status            QueueStatus @default(CHECKED_IN)
+  sequenceNumber    Int
+  studentIdentifier String?
+  checkedInAt       DateTime    @default(now()) @db.Timestamptz
+  servingStartedAt  DateTime?   @db.Timestamptz
+  servedAt          DateTime?   @db.Timestamptz
+  createdAt         DateTime    @default(now()) @db.Timestamptz
+  updatedAt         DateTime    @updatedAt      @db.Timestamptz
 
-  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
-  menuDish MenuDish? @relation(fields: [menuDishId], references: [id], onDelete: SetNull)
-  loggedBy User      @relation("FoodLogger", fields: [loggedById], references: [id], onDelete: Restrict)
+  menu    Menu      @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  slot    TimeSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  booking Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  student User?     @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  @@index([menuId])
-  @@index([loggedAt])
-  @@map("food_records")
+  @@unique([menuId, sequenceNumber])
+  @@index([menuId, status])
+  @@index([studentId, status])
+  @@index([slotId])
+  @@index([status, sequenceNumber])
+  @@map("queue_entries")
 }
 
-/// Student's meal rating (future feature, schema ready).
+/// Food preparation, serving, and waste log.
+model FoodLog {
+  id          String   @id @default(uuid())
+  messId      String
+  menuId      String?
+  date        DateTime @db.Date
+  mealType    MealType
+  preparedKg  Float
+  servedKg    Float
+  wastedKg    Float
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt      @db.Timestamptz
+
+  mess      Mess     @relation(fields: [messId], references: [id], onDelete: Restrict)
+  menu      Menu?    @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  createdBy User     @relation("FoodLogger", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([messId, date, mealType])
+  @@index([messId, date])
+  @@index([date, mealType])
+  @@index([menuId])
+  @@index([createdById])
+  @@map("food_logs")
+}
+
+/// Student's meal rating for a completed meal.
 model Feedback {
   id        String   @id @default(uuid())
   studentId String
+  bookingId String   @unique
   menuId    String
   rating    Int
   comment   String?
   createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt      @db.Timestamptz
 
-  student User @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  menu    Menu @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  student User    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  menu    Menu    @relation(fields: [menuId], references: [id], onDelete: Restrict)
 
-  @@unique([studentId, menuId])
+  @@index([studentId])
   @@index([menuId])
   @@map("feedbacks")
 }

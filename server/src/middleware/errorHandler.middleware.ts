@@ -17,7 +17,9 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   }
 
   // Unexpected error
-  console.error('Unhandled error:', err);
+  if (process.env.NODE_ENV !== 'test') {
+    console.error('Unhandled error:', err);
+  }
   return res.status(500).json({
     success: false,
     error: {

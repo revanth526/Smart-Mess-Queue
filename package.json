@@ -4,6 +4,7 @@
   "private": true,
   "description": "Smart Mess Queue & Food Waste Optimization Platform",
   "scripts": {
+    "dev": "concurrently -n \"server,client\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server",
     "build:client": "npm run build --prefix client",
@@ -24,6 +25,7 @@
     "setup": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install"
   },
   "devDependencies": {
+    "concurrently": "^10.0.6",
     "prettier": "^3.3.0"
   }
 }

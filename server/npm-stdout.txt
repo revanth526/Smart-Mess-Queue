@@ -1,0 +1,8 @@
+
+> @smart-mess/server@1.0.0 dev
+> tsx watch src/server.ts
+
+✓ Server running on http://localhost:3000
+  Environment: development
+  Health check: http://localhost:3000/api/health
+✓ Database connected

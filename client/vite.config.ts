@@ -23,4 +23,28 @@ export default defineConfig({
       },
     },
   },
+  // Pre-bundle heavy deps so Vite doesn't discover them lazily on first page load.
+  // This moves the work to startup and makes the browser request much faster.
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'axios',
+      'socket.io-client',
+    ],
+  },
+  build: {
+    // Chunk large vendor libraries separately so repeat visits are fast
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
+          socket: ['socket.io-client'],
+        },
+      },
+    },
+  },
 });
