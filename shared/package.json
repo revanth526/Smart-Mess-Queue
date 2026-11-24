@@ -2,8 +2,8 @@
   "name": "@smart-mess/shared",
   "version": "1.0.0",
   "private": true,
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "type": "module",
+  "main": "src/index.js",
   "scripts": {},
   "dependencies": {
     "zod": "^3.23.0"
