@@ -355,10 +355,8 @@ http://localhost:5173
 The Vite development server proxies API requests to the backend.
 
 ### Application URLs
+## 🚀 Live Deployment
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
-| Backend | http://localhost:3000 |
-| API Health Check | http://localhost:3000/api/health |
-| Prisma Studio | http
+| 🌐 The live deployment link| [https://client-sooty-ten-21.vercel.app/login](https://client-sooty-ten-21.vercel.app/login) |
