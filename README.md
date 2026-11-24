@@ -1,375 +1,364 @@
-# Smart Mess Queue & Food Waste Optimization Platform
+# 🍽️ Smart Mess Queue & Food Waste Optimization Platform
 
-A full-stack web application to help students and mess administrators manage meal queues, bookings, demand, and food waste in college dining halls.
+A full-stack web application designed to modernize college dining operations through intelligent meal booking, real-time queue management, demand tracking, and food waste analytics.
 
-## Technology Stack
+The platform connects students and mess administrators through a centralized system that improves dining experiences, reduces waiting times, optimizes food preparation, and minimizes food wastage.
 
-| Layer          | Technology                                                         |
-| -------------- | ------------------------------------------------------------------ |
-| **Frontend**   | React 19, TypeScript, Vite, Tailwind CSS                           |
-| **Backend**    | Node.js, Express.js, TypeScript                                    |
-| **Database**   | PostgreSQL 16, Prisma ORM                                          |
-| **Real-time**  | Socket.IO                                                          |
-| **Auth**       | JWT (access + HTTP-only refresh token)                             |
-| **Validation** | Zod                                                                |
-| **Testing**    | Vitest + React Testing Library (client), Jest + Supertest (server) |
+---
 
-## Prerequisites
+## ✨ Key Features
 
-- **Node.js** ≥ 20 (tested on v24)
-- **npm** ≥ 10
-- **PostgreSQL** 16+ (via Docker or local install)
-- **Docker** & **Docker Compose** (optional, for PostgreSQL)
+### 🔐 1. Authentication & Role-Based Access Control
+- Secure JWT-based authentication.
+- Separate access for Students and Mess Administrators.
+- Short-lived access tokens and HTTP-only refresh tokens.
+- Refresh token rotation and replay attack detection.
+- Bcrypt password hashing with 12 rounds.
+- Secure session and authentication management.
 
-## Installation
+### 🍱 2. Mess & Menu Management
+- Manage multiple dining halls (messes).
+- Configure dining hall capacity.
+- Create and manage reusable food item catalogs.
+- Configure breakfast, lunch, and dinner schedules.
+- Set meal timings, slot durations, and booking cutoff deadlines.
+- Publish menus with automatically generated time slots.
 
-```bash
-# Clone the repository
-git clone <repo-url>
-cd Smart-Mess-Queue
+### 📅 3. Smart Meal Booking
+- Students can browse menus and book meal slots.
+- Conflict-free booking with automatic cutoff validation.
+- Real-time slot capacity management.
+- Database-level atomic booking operations to prevent overbooking.
+- Idempotent booking operations.
+- Transaction-safe cancellation and capacity recovery.
 
-# Install all dependencies (root + client + server + shared)
-npm run setup
+### 🎟️ 4. Real-Time Queue Management
+- Digital meal check-in system.
+- Automatic sequential ticket generation.
+- 15-minute pre-slot check-in validation.
+- Live queue status updates using Socket.IO.
+- Queue state management:
+  - `CHECKED_IN`
+  - `WAITING`
+  - `SERVING`
+  - `SERVED`
+  - `NO_SHOW`
+- Admin-managed walk-in entries.
+- Real-time synchronization between students and administrators.
+
+### ♻️ 5. Food Waste Tracking & Analytics
+- Record prepared, served, and wasted food quantities.
+- Automatic calculation of remaining food.
+- Automatic waste percentage calculation.
+- Historical waste tracking.
+- Analytics by date, meal type, menu, and dining hall.
+- Backend-enforced mathematical validation to maintain accurate records.
+
+### ⭐ 6. Student Feedback & Operational Analytics
+- Students can submit feedback after completing a meal.
+- Integer-based ratings from 1 to 5.
+- Optional comments with a 500-character limit.
+- Feedback restricted to verified completed meals.
+- Admin dashboards for operational insights.
+- Optimized batch queries to reduce unnecessary database requests.
+- Strict multi-mess data isolation.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 |
+| Language | TypeScript |
+| Build Tool | Vite |
+| Styling | Tailwind CSS |
+| Backend | Node.js |
+| API Framework | Express.js |
+| Database | PostgreSQL 16 |
+| ORM | Prisma |
+| Real-Time Communication | Socket.IO |
+| Authentication | JWT |
+| Password Security | Bcrypt |
+| Validation | Zod |
+| Client Testing | Vitest, React Testing Library |
+| Server Testing | Jest, Supertest |
+
+---
+
+## 🏗️ System Architecture
+
+The application follows a modular, layered architecture that separates presentation, business logic, and data access.
+
+```text
+                  STUDENT / ADMIN
+                         |
+                         ▼
+                REACT FRONTEND
+                 React + Vite
+                         |
+                  REST API / Socket.IO
+                         |
+                         ▼
+                EXPRESS BACKEND
+                         |
+                  ROUTES LAYER
+                         |
+                         ▼
+               CONTROLLERS LAYER
+                         |
+                         ▼
+                SERVICES LAYER
+                         |
+                         ▼
+              REPOSITORIES LAYER
+                         |
+                         ▼
+                  PRISMA ORM
+                         |
+                         ▼
+                 POSTGRESQL DB
 ```
 
-## Environment Setup
+**Backend request flow:**
 
-```bash
-# Copy the environment template
-cp .env.example .env
+`Routes → Controllers → Services → Repositories → Prisma → PostgreSQL`
 
-# Edit .env with your values (defaults work for local development)
-```
+This architecture improves maintainability, scalability, testability, and separation of concerns.
 
-### Environment Variables
+---
 
-| Variable               | Default                                                        | Description                       |
-| ---------------------- | -------------------------------------------------------------- | --------------------------------- |
-| `DATABASE_URL`         | `postgresql://postgres:postgres@localhost:5432/smart_mess_dev` | PostgreSQL connection string      |
-| `JWT_ACCESS_SECRET`    | —                                                              | Secret for signing access tokens  |
-| `JWT_REFRESH_SECRET`   | —                                                              | Secret for signing refresh tokens |
-| `ACCESS_TOKEN_EXPIRY`  | `15m`                                                          | Access token lifetime             |
-| `REFRESH_TOKEN_EXPIRY` | `7d`                                                           | Refresh token lifetime            |
-| `SERVER_PORT`          | `3000`                                                         | Backend server port               |
-| `CLIENT_URL`           | `http://localhost:5173`                                        | Frontend URL (for CORS)           |
-| `NODE_ENV`             | `development`                                                  | Environment mode                  |
-| `BCRYPT_ROUNDS`        | `12`                                                           | bcrypt hash rounds                |
+## 📁 Project Structure
 
-## PostgreSQL Setup
-
-### Option A: Docker (recommended)
-
-```bash
-# Start PostgreSQL container
-docker compose up -d
-
-# Verify it's running
-docker compose ps
-```
-
-### Option B: Local PostgreSQL
-
-1. Install PostgreSQL 16+
-2. Create the database:
-   ```sql
-   CREATE DATABASE smart_mess_dev;
-   ```
-3. Update `DATABASE_URL` in `.env` if using different credentials.
-
-## Prisma Setup
-
-```bash
-# Generate the Prisma client
-cd server
-npx prisma generate
-
-# Run database migrations
-npx prisma migrate dev
-
-# (Optional) Open Prisma Studio to browse data
-npx prisma studio
-```
-
-Or use the root shortcuts:
-
-```bash
-npm run db:generate
-npm run db:migrate
-npm run db:studio
-```
-
-## Running the Application
-
-### Backend
-
-```bash
-# From root
-npm run dev:server
-
-# Or from server/
-cd server
-npm run dev
-```
-
-The server starts at `http://localhost:3000`. Verify with:
-
-```
-GET http://localhost:3000/api/health
-```
-
-### Frontend
-
-```bash
-# From root
-npm run dev:client
-
-# Or from client/
-cd client
-npm run dev
-```
-
-The client starts at `http://localhost:5173`. API requests are proxied to the backend.
-
-### Both (in separate terminals)
-
-```bash
-# Terminal 1
-npm run dev:server
-
-# Terminal 2
-npm run dev:client
-```
-
-## Running Tests
-
-```bash
-# All tests
-npm test
-
-# Client tests only
-npm run test:client
-
-# Server tests only
-npm run test:server
-
-# Watch mode (client)
-cd client && npm run test:watch
-
-# Watch mode (server)
-cd server && npm run test:watch
-```
-
-## Linting & Formatting
-
-```bash
-# Lint all
-npm run lint
-
-# Format all files
-npm run format
-
-# Check formatting (CI)
-npm run format:check
-```
-
-## Project Structure
-
-```
+```text
 Smart-Mess-Queue/
-├── client/                      # React frontend
+│
+├── client/                         # React frontend
 │   ├── src/
-│   │   ├── api/                 # API client modules
-│   │   ├── components/          # Reusable UI components
-│   │   ├── context/             # React Context providers
-│   │   ├── hooks/               # Custom React hooks
-│   │   ├── layouts/             # Layout wrappers
-│   │   ├── pages/               # Route-level page components
-│   │   ├── router/              # React Router configuration
-│   │   ├── services/            # Non-API services (Socket.IO, etc.)
-│   │   ├── types/               # Frontend-specific TypeScript types
-│   │   ├── utils/               # Utility functions
-│   │   ├── App.tsx              # Root component
-│   │   ├── main.tsx             # Entry point
-│   │   └── index.css            # Global styles (Tailwind)
+│   │   ├── api/                    # API client modules
+│   │   ├── components/              # Reusable UI components
+│   │   ├── context/                 # React context providers
+│   │   ├── hooks/                   # Custom React hooks
+│   │   ├── layouts/                 # Application layouts
+│   │   ├── pages/                   # Application pages
+│   │   ├── router/                  # Routing configuration
+│   │   ├── services/                # Socket.IO and other services
+│   │   ├── types/                   # Frontend TypeScript types
+│   │   ├── utils/                   # Utility functions
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   │
 │   ├── index.html
 │   ├── vite.config.ts
 │   ├── vitest.config.ts
 │   ├── tailwind.config.ts
 │   └── package.json
 │
-├── server/                      # Express backend
+├── server/                          # Express backend
 │   ├── src/
-│   │   ├── config/              # Environment, CORS, constants
-│   │   ├── controllers/         # Route handlers
-│   │   ├── errors/              # Custom error classes
-│   │   ├── lib/                 # Prisma client singleton
-│   │   ├── middleware/          # Express middleware
-│   │   ├── repositories/       # Data access layer
-│   │   ├── routes/              # Express route definitions
-│   │   ├── services/            # Business logic
-│   │   ├── sockets/             # Socket.IO handlers
-│   │   ├── types/               # TypeScript type augmentations
-│   │   ├── utils/               # Utilities (API response helpers)
-│   │   ├── validators/          # Zod request validators
-│   │   ├── app.ts               # Express app setup
-│   │   └── server.ts            # HTTP server entry point
+│   │   ├── config/                  # Environment and app config
+│   │   ├── controllers/             # Request handlers
+│   │   ├── errors/                  # Custom error classes
+│   │   ├── lib/                     # Shared libraries
+│   │   ├── middleware/              # Express middleware
+│   │   ├── repositories/            # Database access layer
+│   │   ├── routes/                  # API routes
+│   │   ├── services/                # Business logic
+│   │   ├── sockets/                 # Socket.IO handlers
+│   │   ├── types/                   # Backend TypeScript types
+│   │   ├── utils/                   # Helper functions
+│   │   ├── validators/              # Zod validators
+│   │   ├── app.ts                   # Express configuration
+│   │   └── server.ts                # Server entry point
+│   │
 │   ├── prisma/
-│   │   ├── schema.prisma        # Database schema
-│   │   └── seed.ts              # Seed data script
+│   │   ├── schema.prisma            # Database schema
+│   │   └── seed.ts                  # Seed data
+│   │
 │   └── package.json
 │
-├── shared/                      # Shared code (types, constants, validators)
+├── shared/                          # Shared application code
 │   └── src/
-│       ├── types/               # Enums, interfaces, API types
-│       ├── constants/           # Shared constants
-│       ├── validators/          # Shared Zod schemas
+│       ├── types/
+│       ├── constants/
+│       ├── validators/
 │       └── index.ts
 │
-├── docker-compose.yml           # PostgreSQL container
-├── .env.example                 # Environment template
-├── .prettierrc                  # Prettier configuration
+├── docker-compose.yml
+├── .env.example
 ├── .gitignore
-├── package.json                 # Root scripts
+├── .prettierrc
+├── package.json
 └── README.md
 ```
 
-## Core Domain Modules
+---
 
-The platform implements 6 core domain modules following a strict layered architecture (`routes → controllers → services → repositories → Prisma`):
+## ⚙️ Prerequisites
 
-1. **Authentication & RBAC (`/api/auth`)**:
-   - Roles: `STUDENT` and `MESS_ADMIN`.
-   - Short-lived JWT access tokens (15m) and secure, HTTP-only refresh tokens (7d).
-   - Refresh token rotation with automatic replay attack detection (reused tokens revoke all user sessions).
-   - Bcrypt password hashing (12 rounds) with constant-time dummy hashing against timing attacks.
+Make sure the following software is installed:
 
-2. **Mess & Menu Management (`/api/messes`, `/api/menus`, `/api/menu-items`, `/api/meal-configs`)**:
-   - Dining hall capacity configuration and reusable dish catalogs.
-   - Configurable meal service windows (Breakfast, Lunch, Dinner) with custom slot durations and cutoff times.
-   - Menu publishing with automatic time slot generation based on meal configs.
-
-3. **Student Booking Flow (`/api/bookings`)**:
-   - Conflict-free meal booking with cutoff deadlines.
-   - **Atomic concurrency protection**: Slots use database-level atomic increments (`UPDATE time_slots SET currentBookings = currentBookings + 1 WHERE id = $1 AND currentBookings < capacity`) to guarantee zero overbooking under high concurrency.
-   - Idempotent rebooking and transactional cancellation capacity recovery.
-
-4. **Check-in & Live Queue (`/api/queue`)**:
-   - 15-minute pre-slot check-in window validation.
-   - Sequential, monotonic ticketing per meal service.
-   - State machine: `CHECKED_IN` → `WAITING` → `SERVING` → `SERVED` (or `NO_SHOW`).
-   - Real-time updates broadcast via Socket.IO strictly _after_ database transactions commit.
-   - Admin walk-in entry management without creating fake user accounts.
-
-5. **Food Waste Tracking & Analytics (`/api/food-logs`)**:
-   - Strict mathematical invariants enforced on backend:
-     - `preparedKg >= 0`, `servedKg >= 0`, `wastedKg >= 0`
-     - `servedKg + wastedKg <= preparedKg`
-     - Derived `remainingKg = preparedKg - servedKg - wastedKg`
-     - Derived `wastePercentage = (wastedKg / preparedKg) * 100` (safe zero handling)
-   - Historical tracking by date, meal type, menu, and dining hall.
-
-6. **Student Feedback & Operational Metrics (`/api/feedback`)**:
-   - Service verification: Only legitimate completed meals (`SERVED` status with completed timestamp) can receive feedback.
-   - Rejection of in-progress, cancelled, no-show, or future meals/slots.
-   - Integer rating (1–5) and comment validation (max 500 characters).
-   - Strict multi-mess tenant isolation for all admin analytics and queries.
-   - High-performance batch operational metrics eliminating N+1 database queries.
+- **Node.js:** 20 or higher (tested with v24)
+- **npm:** 10 or higher
+- **PostgreSQL:** 16 or higher
+- **Docker & Docker Compose:** Optional, recommended for local database setup
+- **Git:** For version control
 
 ---
 
-## Production Deployment Guide
+## 🚀 Getting Started
 
-### 1. Build Artifacts
+Follow these steps to run the project locally.
+
+### 1. Clone the Repository
 
 ```bash
-# Build frontend client (outputs to client/dist)
-npm run build:client
-
-# Compile backend TypeScript (outputs to server/dist)
-npm run build:server
+git clone <repo-url>
+cd Smart-Mess-Queue
 ```
 
-### 2. Production Database Migration
+### 2. Install Dependencies
 
-In production, run Prisma migration deployment to apply schema migrations without invoking development resets:
+Install dependencies across the root, frontend, backend, and shared packages.
 
 ```bash
-cd server
-npx prisma migrate deploy
+npm run setup
 ```
 
-### 3. Production Environment Checklist
+### 3. Configure Environment Variables
 
-Ensure the production environment defines:
+Copy the example environment file:
 
-- `NODE_ENV=production`
-- `DATABASE_URL` pointing to production PostgreSQL with SSL (`?sslmode=require`).
-- `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` set to distinct, cryptographically random 256-bit keys (`openssl rand -base64 48`).
-- `CLIENT_URL` pointing to the public HTTPS domain of the frontend for CORS and Cookie scoping.
-- `SERVER_PORT` set to your application port (e.g. `3000`).
-
-### 4. Reverse Proxy & WebSocket Configuration (Nginx)
-
-When deploying behind Nginx or an Application Load Balancer, ensure WebSocket upgrade headers are passed for Socket.IO:
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name mess.university.edu;
-
-    # Frontend static files
-    location / {
-        root /var/www/smart-mess-queue/client/dist;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Backend REST API
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Real-time WebSockets
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:3000/socket.io/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
+```bash
+cp .env.example .env
 ```
+
+Update the `.env` file with your configuration.
+
+| Variable | Default / Description |
+|---|---|
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/smart_mess_dev` |
+| `JWT_ACCESS_SECRET` | Secret for signing access tokens |
+| `JWT_REFRESH_SECRET` | Secret for signing refresh tokens |
+| `ACCESS_TOKEN_EXPIRY` | `15m` |
+| `REFRESH_TOKEN_EXPIRY` | `7d` |
+| `SERVER_PORT` | `3000` |
+| `CLIENT_URL` | `http://localhost:5173` |
+| `NODE_ENV` | `development` |
+| `BCRYPT_ROUNDS` | `12` |
+
+**Important:** Use strong, unique secrets for JWT authentication. Never commit your actual `.env` file to version control.
 
 ---
 
-## Available Scripts
+## 🐘 Database Setup
 
-### Root
+You can configure PostgreSQL using either Docker or a local PostgreSQL installation.
 
-| Script                 | Description                                   |
-| ---------------------- | --------------------------------------------- |
-| `npm run setup`        | Install all dependencies across all packages  |
-| `npm run dev:client`   | Start frontend development server             |
-| `npm run dev:server`   | Start backend development server              |
-| `npm run build:client` | Build frontend for production (`client/dist`) |
-| `npm run build:server` | Compile backend TypeScript (`server/dist`)    |
-| `npm run lint`         | Lint client + server codebases                |
-| `npm run format`       | Format all files with Prettier                |
-| `npm test`             | Run complete server and client test suites    |
-| `npm run db:migrate`   | Run Prisma development migrations             |
-| `npm run db:generate`  | Generate Prisma client                        |
-| `npm run db:seed`      | Seed the database                             |
-| `npm run db:studio`    | Open Prisma Studio database viewer            |
-| `npm run db:reset`     | Reset database (drop + migrate + seed)        |
+### Option A: Docker (Recommended)
+
+Start the PostgreSQL container:
+
+```bash
+docker compose up -d
+```
+
+Check the container status:
+
+```bash
+docker compose ps
+```
+
+### Option B: Local PostgreSQL
+
+1. Install PostgreSQL 16 or higher.
+2. Open PostgreSQL or pgAdmin.
+3. Create a database:
+
+```sql
+CREATE DATABASE smart_mess_dev;
+```
+
+4. Update `DATABASE_URL` in your `.env` file if necessary.
 
 ---
 
-## License
+## 🗄️ Prisma Configuration
 
-ISC
-#   S m a r t - M e s s - Q u e u e  
- 
+Generate the Prisma client:
+
+```bash
+npm run db:generate
+```
+
+Run database migrations:
+
+```bash
+npm run db:migrate
+```
+
+Seed the database (optional):
+
+```bash
+npm run db:seed
+```
+
+Open Prisma Studio:
+
+```bash
+npm run db:studio
+```
+
+Prisma Studio provides a graphical interface for viewing and managing database records.
+
+---
+
+## ▶️ Running the Application
+
+The frontend and backend run independently during development.
+
+### Start the Backend
+
+From the project root:
+
+```bash
+npm run dev:server
+```
+
+Backend URL:
+
+```text
+http://localhost:3000
+```
+
+Health check:
+
+```text
+GET http://localhost:3000/api/health
+```
+
+### Start the Frontend
+
+Open another terminal:
+
+```bash
+npm run dev:client
+```
+
+Frontend URL:
+
+```text
+http://localhost:5173
+```
+
+The Vite development server proxies API requests to the backend.
+
+### Application URLs
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend | http://localhost:3000 |
+| API Health Check | http://localhost:3000/api/health |
+| Prisma Studio | http
